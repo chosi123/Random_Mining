@@ -1,0 +1,23 @@
+name: random_mining
+version: '${version}'
+main: org.chosi123.random_mining.Random_mining
+api-version: '1.21'
+description: 블럭 경도가 주기적으로 무작위 재배치되고, 채굴을 취소하면 즉사하는 하드코어 채굴 플러그인.
+author: chosi123
+
+commands:
+  randommining:
+    description: random_mining 관리 명령어
+    usage: /randommining <info|list|reroll|reload|toggle>
+    aliases: [rm, rmine, 랜덤채굴]
+
+permissions:
+  randommining.use:
+    description: /randommining info, list 사용
+    default: true
+  randommining.admin:
+    description: /randommining reroll, reload, toggle 사용
+    default: op
+  randommining.bypass:
+    description: 랜덤 경도 / 즉사 판정에서 제외
+    default: false

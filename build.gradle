@@ -1,0 +1,99 @@
+plugins {
+    id 'java'
+    id("xyz.jpenilla.run-paper") version "3.0.2"
+}
+
+group = 'org.chosi123'
+version = '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+    maven {
+        name = "papermc-repo"
+        url = "https://repo.papermc.io/repository/maven-public/"
+    }
+}
+
+dependencies {
+    compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
+}
+
+tasks {
+    runServer {
+        // Configure the Minecraft version for our task.
+        // This is the only required configuration besides applying the plugin.
+        // Your plugin's jar (or shadowJar if present) will be used automatically.
+        minecraftVersion("1.21.11")
+    }
+}
+
+def targetJavaVersion = 21
+java {
+    def javaVersion = JavaVersion.toVersion(targetJavaVersion)
+    sourceCompatibility = javaVersion
+    targetCompatibility = javaVersion
+    if (JavaVersion.current() < javaVersion) {
+        toolchain.languageVersion = JavaLanguageVersion.of(targetJavaVersion)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+
+    if (targetJavaVersion >= 10 || JavaVersion.current().isJava10Compatible()) {
+        options.release.set(targetJavaVersion)
+    }
+}
+
+processResources {
+    def props = [version: version]
+    inputs.properties props
+    filteringCharset 'UTF-8'
+    filesMatching('plugin.yml') {
+        expand props
+    }
+}
+
+// ── 서버 plugins 폴더로 바로 배포 ────────────────────────────────
+// ./gradlew deploy
+// 다른 서버에 넣고 싶으면: ./gradlew deploy -PserverPluginsDir=D:/내서버/plugins
+def serverPluginsDir = providers.gradleProperty('serverPluginsDir')
+        .orElse('C:/Users/fyg75/OneDrive/바탕 화면/1.21.11_Server/plugins')
+
+tasks.register('deploy') {
+    group = 'distribution'
+    description = '빌드한 jar 를 서버 plugins 폴더에 복사한다.'
+    dependsOn tasks.jar
+
+    // Copy 태스크를 쓰면 목적지 폴더를 알아서 만들어버려서, 경로를 잘못 적었을 때
+    // 조용히 엉뚱한 곳에 배포된다. 그래서 직접 복사한다.
+    def jarFile = tasks.jar.archiveFile
+    def jarName = tasks.jar.archiveFileName
+    def destDir = serverPluginsDir.map { layout.projectDirectory.dir(it).asFile }
+
+    doLast {
+        def dir = destDir.get()
+        if (!dir.isDirectory()) {
+            throw new GradleException("서버 plugins 폴더를 찾을 수 없습니다: ${dir}"
+                    + " — -PserverPluginsDir=<경로> 로 지정하거나 build.gradle 의 기본값을 고쳐주세요.")
+        }
+
+        // 버전이 바뀌면 예전 jar 가 남아 같은 플러그인이 두 번 로드된다. 우리 것만 골라 지운다.
+        def keep = jarName.get()
+        dir.listFiles({ f -> f.name ==~ /random_mining-.*\.jar/ && f.name != keep } as FileFilter)?.each {
+            logger.lifecycle("이전 버전 제거: ${it.name}")
+            if (!it.delete()) {
+                throw new GradleException("${it.name} 삭제 실패 — 서버가 켜져 있으면 끄고 다시 시도해주세요.")
+            }
+        }
+
+        def target = new File(dir, keep)
+        try {
+            java.nio.file.Files.copy(jarFile.get().asFile.toPath(), target.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+        } catch (IOException e) {
+            throw new GradleException("복사 실패 — 서버가 켜져 있으면 끄고 다시 시도해주세요. (${e.message})", e)
+        }
+        logger.lifecycle("배포 완료 → ${target}")
+    }
+}
