@@ -80,7 +80,6 @@ public final class PunishmentService {
      */
     public void punish(Player canceler, List<Player> pool) {
         List<Player> candidates = new ArrayList<>(pool);
-        candidates.removeIf(p -> p.getUniqueId().equals(canceler.getUniqueId()));
 
         if (candidates.isEmpty()) {
             // 대신 죽어줄 사람이 없다. 원래대로 본인이 죽는다.
